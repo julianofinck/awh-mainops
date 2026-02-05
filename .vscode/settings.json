@@ -1,0 +1,19 @@
+{
+    "python.defaultinterpreterpath": ".venv/scripts/python",
+    "files.exclude": {
+        "**/*.pyc": true,
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/*.egg-info": true,
+    },
+    "terminal.integrated.defaultprofile.windows": "command prompt",
+    "terminal.integrated.profiles.windows": {
+        "command prompt": {
+            "path": "c:\\windows\\system32\\cmd.exe",
+            "args": [
+                "/k",
+                ".venv\\scripts\\activate"
+            ]
+        }
+    }
+}
