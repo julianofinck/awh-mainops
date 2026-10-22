@@ -1,61 +1,62 @@
+import datetime
+import logging
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.data.database import save_measurements
-from src.scraper import get_messungen
-from src.utils.io import read_bezeichnungen
-from use_case.mainops_client import (Zugangsdaten, MainOpsClient, hole_eindeutig_und_sortiert_speichern)
-
 load_dotenv()
 
-def main():
+from src.persistence.sqlite import speichere_in_sqlite
+from src.persistence.state import lade_data, speichere_data
+from src.utils.logger import config_logger
+from src.mainops.client import MainOpsClient, Zugangsdaten
+from src.transform.measurements import data_verarbeiten
+
+LOG_LEVEL = os.getenv("LOG_LEVEL").upper()
+
+config_logger(__file__, LOG_LEVEL)
+
+log = logging.getLogger(__name__)
+
+SEIT = os.getenv("SEIT", "")
+BIS = datetime.datetime.now().strftime("%d.%m.%Y")
+
+
+def mainops_client_ausfuehren():
     zugangsdaten = Zugangsdaten(
         os.getenv("USERNAME", ""), 
-        os.getenv("PASSWORD", "")
+        os.getenv("PASSWORD", ""),
     )
     client = MainOpsClient(zugangsdaten)
+
+    # Auth an MainOps
     client.starte_session()
     client.anmelden()
 
+    # Requests an MainOps
+    projekte = [p for p in client.hole_projekte() if "Vergabeeinheit " in p.name]
+    client.projekte = projekte
 
-    """
-    Welches Projekt?
-    86 '2. S-Bahn-Stammstrecke München'
-    85 'OB-West'
-    88 'Rettungsschacht 4'
-    80 'Test Project 1 Munich'
-    327 'Vergabeeinheit 10'
-    90 'Vergabeeinheit 30'
-    91 'Vergabeeinheit 41'
-    694 'Vergabeeinheit 733'
-    """
-    projekte = client.hole_projekte()
-    for p_id in (327, 90, 91, 694):
-        projekt, = [p for p in projekte if p.id == p_id]
-        # "projekte" behält die Verfügbaren
+    client.hole_messungen(von=SEIT, bis=BIS)
+    client.ermittle_messstellen()
+    client.hole_offsets()
 
-        # Messungen
-        datei = "src/data/data.csv"
-        client.exportiere_messungen(
-            von="01.09.2019",
-            bis="14.09.2026",
-            projekt=projekt,
-            export_datei=datei,
-        )
+    speichere_data(client.state)
 
-        # Aus Messungen, 
-        # Finde eindeutige im Projekt
-        eindeutige = hole_eindeutig_und_sortiert_speichern(datei)
+    return client
 
-        # Hole ROKs
+def into_db(state):
+    if not state:
+        state = lade_data()
 
-        # in SQLite speichern
+    data = data_verarbeiten(state)
 
-    bezeichnungen = read_bezeichnungen(Path("bezeichnungen2read.txt"))
-    df = get_messungen(bezeichnungen)
-    save_measurements(df)
+    speichere_in_sqlite(*data)
+
+
+def main():
+    client = mainops_client_ausfuehren()
+    into_db(client.state)
 
 
 if __name__ == "__main__":
