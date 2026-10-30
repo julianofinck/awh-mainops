@@ -55,8 +55,11 @@ def into_db(state):
 
 
 def main():
+    pid = os.getpid()
+    log.info(f"Starte PID: {pid}")
     client = mainops_client_ausfuehren()
     into_db(client.state)
+    log.info(f"Ende PID: {pid}")
 
 
 if __name__ == "__main__":
